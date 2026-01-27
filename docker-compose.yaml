@@ -1,0 +1,102 @@
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - C:\Users\Henry\Documents\local-llm\Ollama:/root/.ollama
+      - ./entrypoint.sh:/entrypoint.sh
+    restart: unless-stopped
+    gpus: all
+    environment:
+      - OLLAMA_FLASH_ATTENTION=1
+      - OLLAMA_USE_CUDA=1 
+      - OLLAMA_MAX_LOADED_MODELS=1
+      - OLLAMA_NUM_CTX=16384
+      - OLLAMA_KV_CACHE_TYPE=q8_0
+    entrypoint: ["/usr/bin/bash", "/entrypoint.sh"]
+
+  openwebui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: openwebui
+    ports:
+      - "8080:8080"
+    environment:
+      - OLLAMA_API_BASE_URL=http://ollama:11434/api
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_BASE_URLS=http://ollama:11434
+      - ENABLE_OLLAMA_API=true
+      - ENABLE_OPENAI_API=false
+      - WHISPER_MODEL=small
+      - AUDIO_TTS_ENGINE=openai
+      - AUDIO_TTS_OPENAI_API_BASE_URL=http://openedai-speech:8000/v1
+      - AUDIO_TTS_OPENAI_API_KEY=sk-111111111
+      - AUDIO_TTS_MODEL=tts-1
+      - AUDIO_TTS_VOICE=onyx
+      - ENABLE_SEARCH_QUERY_GENERATION=true
+      - WEBSEARCH_ENABLED=true
+      - WEBSEARCH_ENGINE=searxng
+      - SEARXNG_QUERY_URL=http://searxng:8080/search?q=<query>&format=json
+      - WEBSEARCH_RESULTS_COUNT=10
+      - WEBSEARCH_CONCURRENT_REQUESTS=2
+    networks:
+      - searxng
+      - default
+    depends_on:
+      - ollama
+    volumes:
+      - ./openwebui_data:/app/backend/data
+    restart: unless-stopped
+  
+  redis:
+    container_name: redis
+    image: docker.io/valkey/valkey:8-alpine
+    command: valkey-server --save 30 1 --loglevel warning
+    restart: unless-stopped
+    networks:
+      - searxng
+    volumes:
+      - ./valkey-data2:/data
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1m"
+        max-file: "1"
+
+  searxng:
+    container_name: searxng
+    image: docker.io/searxng/searxng:latest
+    restart: unless-stopped
+    networks:
+      - searxng
+    ports:
+      - 8090:8080
+    volumes:
+      - ./searxng/searxng:/etc/searxng:rw
+      - ./searxng-data:/var/cache/searxng:rw
+    environment:
+      - SEARXNG_BASE_URL=https://${SEARXNG_HOSTNAME:-localhost}/
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1m"
+        max-file: "1"
+
+  openedai-speech:
+    container_name: openedai-speech
+    image: ghcr.io/matatonic/openedai-speech-min:latest
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./openedai-speech/voices:/app/voices
+      - ./openedai-speech/config:/app/config
+
+
+networks:
+  searxng:
+    driver: bridge
+
+volumes: {}
