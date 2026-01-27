@@ -12,9 +12,10 @@ services:
     gpus: all
     environment:
       - OLLAMA_FLASH_ATTENTION=1
-      - OLLAMA_USE_CUDA=1 
+      - OLLAMA_USE_CUDA=1
+      - OLLAMA_KEEP_ALIVE=12h
       - OLLAMA_MAX_LOADED_MODELS=1
-      - OLLAMA_NUM_CTX=16384
+      - OLLAMA_NUM_CTX=32768 
       - OLLAMA_KV_CACHE_TYPE=q8_0
     entrypoint: ["/usr/bin/bash", "/entrypoint.sh"]
 
