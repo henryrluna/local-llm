@@ -15,9 +15,39 @@ services:
       - OLLAMA_USE_CUDA=1
       - OLLAMA_KEEP_ALIVE=12h
       - OLLAMA_MAX_LOADED_MODELS=1
-      - OLLAMA_NUM_CTX=32768 
+      - OLLAMA_NUM_CTX=71680
+      - OLLAMA_CONTEXT_LENGTH=71680
       - OLLAMA_KV_CACHE_TYPE=q8_0
     entrypoint: ["/usr/bin/bash", "/entrypoint.sh"]
+
+  local-deep-research:
+    image: localdeepresearch/local-deep-research:latest
+    container_name: local-deep-research
+    ports:
+      - "5000:5000"
+    environment:
+      - LDR_WEB_HOST=0.0.0.0
+      - LDR_WEB_PORT=5000
+      - LDR_DATA_DIR=/data
+      - LDR_LLM_PROVIDER=ollama
+      - LDR_LLM_MODEL=openai-20b-neoplus-uncensored:latest
+      - LDR_LLM_OLLAMA_URL=http://ollama:11434
+      - LDR_SEARCH_ENGINE_WEB_SEARXNG_DEFAULT_PARAMS_INSTANCE_URL=http://searxng:8080
+    networks:
+      - searxng
+      - default
+    depends_on:
+      - ollama
+      - searxng
+    volumes:
+      - ./local-deep-research-data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/v1/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    restart: unless-stopped
 
   openwebui:
     image: ghcr.io/open-webui/open-webui:main
@@ -28,9 +58,10 @@ services:
       - OLLAMA_API_BASE_URL=http://ollama:11434/api
       - OLLAMA_BASE_URL=http://ollama:11434
       - OLLAMA_BASE_URLS=http://ollama:11434
+      - DEFAULT_MODELS=openai-20b-neoplus-uncensored:latest
       - ENABLE_OLLAMA_API=true
       - ENABLE_OPENAI_API=false
-      - WHISPER_MODEL=small
+      - WHISPER_MODEL=faster
       - AUDIO_TTS_ENGINE=openai
       - AUDIO_TTS_OPENAI_API_BASE_URL=http://openedai-speech:8000/v1
       - AUDIO_TTS_OPENAI_API_KEY=sk-111111111
@@ -40,8 +71,8 @@ services:
       - WEBSEARCH_ENABLED=true
       - WEBSEARCH_ENGINE=searxng
       - SEARXNG_QUERY_URL=http://searxng:8080/search?q=<query>&format=json
-      - WEBSEARCH_RESULTS_COUNT=10
-      - WEBSEARCH_CONCURRENT_REQUESTS=2
+      - WEBSEARCH_RESULTS_COUNT=15
+      - WEBSEARCH_CONCURRENT_REQUESTS=3
     networks:
       - searxng
       - default
@@ -75,7 +106,7 @@ services:
     ports:
       - 8090:8080
     volumes:
-      - ./searxng/searxng:/etc/searxng:rw
+      - ./SearXNG/searxng:/etc/searxng:rw
       - ./searxng-data:/var/cache/searxng:rw
     environment:
       - SEARXNG_BASE_URL=https://${SEARXNG_HOSTNAME:-localhost}/
