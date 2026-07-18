@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0d1321">
+  <title>Deep Research</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header>
+    <div>
+      <p class="eyebrow">LOCAL RESEARCH WORKBENCH</p>
+      <h1>Ask a hard question.<br><span>Come back to evidence.</span></h1>
+    </div>
+    <button id="healthButton" class="health" type="button"><i></i><span>Checking services</span></button>
+  </header>
+
+  <main>
+    <section class="composer panel">
+      <form id="jobForm">
+        <label for="question">Research question</label>
+        <textarea id="question" required minlength="10" placeholder="What do you want investigated deeply?"></textarea>
+        <div class="grid">
+          <label>Model route
+            <select id="provider">
+              <option value="ollama">Local - Ollama</option>
+              <option value="hybrid">Hybrid - local retrieval, cloud writing</option>
+              <option value="cloud">Cloud</option>
+            </select>
+          </label>
+          <label>Seed URLs <span>(one per line)</span>
+            <textarea id="seedUrls" class="small" placeholder="https://example.com/source"></textarea>
+          </label>
+          <label>Substack feeds <span>(one per line)</span>
+            <textarea id="substackFeeds" class="small" placeholder="https://publication.substack.com/feed"></textarea>
+          </label>
+          <fieldset>
+            <legend>Sources</legend>
+            <label class="check"><input id="useWeb" type="checkbox" checked> Search the web</label>
+            <label class="check"><input id="includeX" type="checkbox"> Include X social graph</label>
+          </fieldset>
+        </div>
+        <div id="formError" class="error" role="alert"></div>
+        <button class="primary" type="submit">Begin research <span>→</span></button>
+      </form>
+    </section>
+
+    <section class="queue">
+      <div class="section-title"><div><p class="eyebrow">ASYNCHRONOUS QUEUE</p><h2>Research jobs</h2></div><button id="refresh" class="ghost">Refresh</button></div>
+      <div id="jobs" class="jobs"><p class="empty">No research jobs yet.</p></div>
+    </section>
+  </main>
+
+  <dialog id="jobDialog">
+    <button class="dialog-close" aria-label="Close">×</button>
+    <div id="jobDetail"></div>
+  </dialog>
+  <script src="/static/app.js"></script>
+</body>
+</html>
+

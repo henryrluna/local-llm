@@ -1,7 +1,31 @@
-# Local data / volumes
+# Secrets and local overrides
+.env
+research-harness.env
+
+# Local model and application data
 Ollama/
 openwebui_data/
 searxng-data/
 valkey-data2/
 openedai-speech/
 local-deep-research-data/
+private-corpus/
+
+# Python and generated artifacts
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+work/
+outputs/
+tmp/
+
+# Logs and OS/editor files
+*.log
+*.tmp
+*.cache
+.DS_Store
+Thumbs.db
