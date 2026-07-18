@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     worker_poll_seconds: float = 1.0
 
     ollama_url: str = "http://localhost:11434"
-    ollama_model: str = "qwen2.5:7b"
+    ollama_model: str = "hf.co/bottlecapai/ThinkingCap-Qwen3.6-27B-GGUF:Q4_K_M"
     ollama_embed_model: str = "nomic-embed-text"
     cloud_base_url: str = "https://api.openai.com/v1"
     cloud_model: str = ""
