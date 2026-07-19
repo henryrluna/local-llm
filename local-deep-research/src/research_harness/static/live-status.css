@@ -1,0 +1,74 @@
+.progress {
+  height: 5px;
+  margin-bottom: 22px;
+  position: relative;
+}
+
+.progress > span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  position: absolute;
+  right: 0;
+  top: 8px;
+}
+
+.metric-line {
+  color: var(--ink) !important;
+  line-height: 1.6;
+  margin-top: 9px !important;
+}
+
+.live-status {
+  background: #f7f4ed;
+  border: 1px solid var(--line);
+  margin: 26px 0 20px;
+  padding: 18px;
+}
+
+.live-label {
+  color: var(--blue);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  margin: 0 0 12px;
+  text-transform: uppercase;
+}
+
+.metric-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.metric-grid div {
+  background: white;
+  border: 1px solid var(--line);
+  padding: 11px;
+}
+
+.metric-grid span {
+  color: var(--muted);
+  display: block;
+  font-size: 10px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.metric-grid strong {
+  display: block;
+  font-size: 16px;
+  margin-top: 5px;
+}
+
+.metric-updated {
+  color: var(--muted);
+  font-size: 11px;
+  margin: 11px 0 0;
+}
+
+@media (max-width: 650px) {
+  .metric-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

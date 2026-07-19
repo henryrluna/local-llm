@@ -13,12 +13,14 @@ class Settings(BaseSettings):
     public_base_url: str = "http://localhost:8787"
     data_dir: Path = Path("./data")
     min_report_pages: int = 10
+    min_main_report_words: int = 3000
     max_sources: int = 24
     max_evidence_chars: int = 60_000
     worker_poll_seconds: float = 1.0
+    progress_update_seconds: float = 60.0
 
     ollama_url: str = "http://localhost:11434"
-    ollama_model: str = "hf.co/bottlecapai/ThinkingCap-Qwen3.6-27B-GGUF:Q4_K_M"
+    ollama_model: str = "openai-20b-neoplus-uncensored:latest"
     ollama_embed_model: str = "nomic-embed-text"
     ollama_timeout_seconds: float = 3600
     ollama_num_ctx: int = 32768

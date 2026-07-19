@@ -17,7 +17,7 @@ services:
       OLLAMA_NUM_CTX: "32768"
       OLLAMA_CONTEXT_LENGTH: "32768"
       OLLAMA_KV_CACHE_TYPE: q8_0
-      LOCAL_LLM_MODEL: "${LOCAL_LLM_MODEL:-hf.co/bottlecapai/ThinkingCap-Qwen3.6-27B-GGUF:Q4_K_M}"
+      LOCAL_LLM_MODEL: "${LOCAL_LLM_MODEL:-openai-20b-neoplus-uncensored:latest}"
       LOCAL_LLM_EMBED_MODEL: ${LOCAL_LLM_EMBED_MODEL:-nomic-embed-text}
     entrypoint: ["/usr/bin/bash", "/entrypoint.sh"]
 
@@ -37,7 +37,7 @@ services:
       HARNESS_DATA_DIR: /app/data
       HARNESS_PRIVATE_CORPUS_DIR: /app/private-corpus
       HARNESS_OLLAMA_URL: http://ollama:11434
-      HARNESS_OLLAMA_MODEL: "${LOCAL_LLM_MODEL:-hf.co/bottlecapai/ThinkingCap-Qwen3.6-27B-GGUF:Q4_K_M}"
+      HARNESS_OLLAMA_MODEL: "${LOCAL_LLM_MODEL:-openai-20b-neoplus-uncensored:latest}"
       HARNESS_OLLAMA_EMBED_MODEL: ${LOCAL_LLM_EMBED_MODEL:-nomic-embed-text}
       HARNESS_SEARXNG_URL: http://searxng:8080
     networks:
@@ -66,7 +66,7 @@ services:
       OLLAMA_API_BASE_URL: http://ollama:11434/api
       OLLAMA_BASE_URL: http://ollama:11434
       OLLAMA_BASE_URLS: http://ollama:11434
-      DEFAULT_MODELS: "${LOCAL_LLM_MODEL:-hf.co/bottlecapai/ThinkingCap-Qwen3.6-27B-GGUF:Q4_K_M}"
+      DEFAULT_MODELS: "${LOCAL_LLM_MODEL:-openai-20b-neoplus-uncensored:latest}"
       ENABLE_OLLAMA_API: "true"
       ENABLE_OPENAI_API: "false"
       WHISPER_MODEL: faster

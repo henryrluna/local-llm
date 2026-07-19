@@ -6,7 +6,7 @@ This directory contains the application source built by the root `docker-compose
 docker compose up -d --build
 ```
 
-The service provides a mobile-friendly queue at port 5000, durable SQLite jobs, live progress, stop/retry/resume controls, multi-stage web and private-corpus research, Ollama or OpenAI-compatible providers, citation validation, and 10+ page PDF reports.
+The service provides a mobile-friendly queue at port 5000, durable SQLite jobs, live progress, stop/retry/resume controls, multi-stage web and private-corpus research, Ollama or OpenAI-compatible providers, citation validation, and 10+ page PDF reports. Reports use a one-page executive summary, scope and executed queries, at least 3,000 words of core analysis, numeric citations, bibliography, collection notes, and a final independent evidence audit. A cross-section editorial pass removes repeated facts before rendering; raw evidence excerpts remain in local captures rather than bloating the PDF.
 
 ## Runtime boundaries
 

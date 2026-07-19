@@ -8,8 +8,17 @@ until ollama list >/dev/null 2>&1; do
   sleep 1
 done
 
-ollama pull "${LOCAL_LLM_MODEL:-hf.co/bottlecapai/ThinkingCap-Qwen3.6-27B-GGUF:Q4_K_M}"
-ollama pull "${LOCAL_LLM_EMBED_MODEL:-nomic-embed-text}"
+ensure_model() {
+  local model="$1"
+  if ollama show "$model" >/dev/null 2>&1; then
+    echo "Model already installed: $model"
+  else
+    ollama pull "$model"
+  fi
+}
+
+ensure_model "${LOCAL_LLM_MODEL:-openai-20b-neoplus-uncensored:latest}"
+ensure_model "${LOCAL_LLM_EMBED_MODEL:-nomic-embed-text}"
 ollama list
 
 wait "$ollama_pid"

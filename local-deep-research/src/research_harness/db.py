@@ -45,6 +45,7 @@ class Database:
                     status TEXT NOT NULL,
                     progress INTEGER NOT NULL DEFAULT 0,
                     status_message TEXT NOT NULL DEFAULT '',
+                    metrics_json TEXT NOT NULL DEFAULT '{}',
                     options_json TEXT NOT NULL DEFAULT '{}',
                     checkpoint_json TEXT NOT NULL DEFAULT '{}',
                     canonical_json_path TEXT,
@@ -82,6 +83,9 @@ class Database:
                 CREATE INDEX IF NOT EXISTS idx_events_job ON events(job_id, id);
                 """
             )
+            columns = {row["name"] for row in db.execute("PRAGMA table_info(jobs)").fetchall()}
+            if "metrics_json" not in columns:
+                db.execute("ALTER TABLE jobs ADD COLUMN metrics_json TEXT NOT NULL DEFAULT '{}'")
             placeholders = ",".join("?" for _ in ACTIVE_STATES)
             db.execute(
                 f"UPDATE jobs SET status='queued', status_message='Resuming after service restart', updated_at=? WHERE status IN ({placeholders})",
@@ -106,7 +110,7 @@ class Database:
         if row is None:
             return None
         result = dict(row)
-        for field in ("options_json", "checkpoint_json"):
+        for field in ("options_json", "checkpoint_json", "metrics_json"):
             result[field[:-5]] = json.loads(result.pop(field) or "{}")
         result["cancel_requested"] = bool(result["cancel_requested"])
         return result
@@ -142,6 +146,8 @@ class Database:
             return
         if "checkpoint" in values:
             values["checkpoint_json"] = json.dumps(values.pop("checkpoint"))
+        if "metrics" in values:
+            values["metrics_json"] = json.dumps(values.pop("metrics"))
         values["updated_at"] = utcnow()
         fields = ",".join(f"{key}=?" for key in values)
         with self.connect() as db:
@@ -178,6 +184,7 @@ class Database:
             progress=0,
             status_message="Queued for retry",
             error=None,
+            metrics={},
             cancel_requested=0,
             completed_at=None,
         )
@@ -195,4 +202,3 @@ class Database:
                     source["content_path"], source["content_hash"], json.dumps(source.get("metadata", {})),
                 ),
             )
-

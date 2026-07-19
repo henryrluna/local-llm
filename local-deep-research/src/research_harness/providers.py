@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import json
+import time
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, Callable
 
 import httpx
 
@@ -15,6 +16,10 @@ class ProviderError(RuntimeError):
 
 class ModelProvider(ABC):
     name: str
+
+    def set_progress_callback(self, callback: Callable[[dict[str, Any]], None] | None) -> None:
+        """Receive best-effort live generation statistics when supported."""
+        return None
 
     @abstractmethod
     def chat(self, messages: list[dict[str, str]], *, temperature: float = 0.2) -> str:
@@ -48,6 +53,27 @@ class OllamaProvider(ModelProvider):
         self.chat_max_tokens = settings.ollama_chat_max_tokens
         self.structured_max_tokens = settings.ollama_structured_max_tokens
         self.keep_alive = settings.ollama_keep_alive
+        self.progress_update_seconds = settings.progress_update_seconds
+        self._progress_callback: Callable[[dict[str, Any]], None] | None = None
+        self.use_raw_final_channel = self.model.lower().startswith("openai-20b-neoplus-uncensored")
+
+    def set_progress_callback(self, callback: Callable[[dict[str, Any]], None] | None) -> None:
+        self._progress_callback = callback
+
+    def _emit_progress(self, values: dict[str, Any]) -> None:
+        if self._progress_callback is not None:
+            self._progress_callback(values)
+
+    @staticmethod
+    def _raw_final_prompt(messages: list[dict[str, str]]) -> str:
+        parts = []
+        for message in messages:
+            role = message.get("role", "user")
+            if role not in {"system", "user", "assistant"}:
+                role = "user"
+            parts.append(f"<|{role}|>{message.get('content', '')}<|end|>")
+        parts.append("<|assistant|><|channel|>final<|message|>")
+        return "\n".join(parts)
 
     def _chat_request(
         self,
@@ -57,24 +83,80 @@ class OllamaProvider(ModelProvider):
         max_tokens: int,
         response_format: str | None = None,
     ) -> str:
-        payload: dict[str, Any] = {
-            "model": self.model,
-            "messages": messages,
-            "stream": False,
-            "think": False,
-            "keep_alive": self.keep_alive,
-            "options": {
-                "temperature": temperature,
-                "num_ctx": self.num_ctx,
-                "num_predict": max_tokens,
-            },
+        options: dict[str, Any] = {
+            "temperature": temperature,
+            "num_ctx": self.num_ctx,
+            "num_predict": max_tokens,
         }
-        if response_format:
+        if self.use_raw_final_channel:
+            options["stop"] = ["<|end|>", "<|user|>", "<|assistant|>", "<|system|>"]
+            payload: dict[str, Any] = {
+                "model": self.model,
+                "prompt": self._raw_final_prompt(messages),
+                "raw": True,
+                "stream": self._progress_callback is not None,
+                "keep_alive": self.keep_alive,
+                "options": options,
+            }
+            endpoint = "/api/generate"
+        else:
+            payload = {
+                "model": self.model,
+                "messages": messages,
+                "stream": self._progress_callback is not None,
+                "think": False,
+                "keep_alive": self.keep_alive,
+                "options": options,
+            }
+            endpoint = "/api/chat"
+        if response_format and not self.use_raw_final_channel:
             payload["format"] = response_format
         with httpx.Client(timeout=httpx.Timeout(self.timeout_seconds, connect=10)) as client:
-            response = client.post(f"{self.base_url}/api/chat", json=payload)
+            if self._progress_callback is not None:
+                started = time.monotonic()
+                last_update = started
+                generated_pieces = 0
+                content: list[str] = []
+                with client.stream("POST", f"{self.base_url}{endpoint}", json=payload) as response:
+                    response.raise_for_status()
+                    for line in response.iter_lines():
+                        if not line:
+                            continue
+                        item = json.loads(line)
+                        piece = item.get("response", "") if self.use_raw_final_channel else item.get("message", {}).get("content", "")
+                        if piece:
+                            content.append(piece)
+                            generated_pieces += 1
+                        now = time.monotonic()
+                        if now - last_update >= self.progress_update_seconds and not item.get("done"):
+                            elapsed = max(now - started, 0.001)
+                            self._emit_progress({
+                                "generated_tokens": generated_pieces,
+                                "tokens_per_second": generated_pieces / elapsed,
+                                "elapsed_seconds": round(elapsed),
+                                "estimated": True,
+                                "done": False,
+                                "max_tokens": max_tokens,
+                            })
+                            last_update = now
+                        if item.get("done"):
+                            elapsed = max(now - started, 0.001)
+                            eval_count = int(item.get("eval_count") or generated_pieces)
+                            eval_duration = float(item.get("eval_duration") or 0) / 1_000_000_000
+                            self._emit_progress({
+                                "prompt_tokens": int(item.get("prompt_eval_count") or 0),
+                                "generated_tokens": eval_count,
+                                "tokens_per_second": eval_count / eval_duration if eval_duration else eval_count / elapsed,
+                                "elapsed_seconds": round(elapsed),
+                                "estimated": False,
+                                "done": True,
+                                "max_tokens": max_tokens,
+                            })
+                return "".join(content)
+            response = client.post(f"{self.base_url}{endpoint}", json=payload)
             response.raise_for_status()
-            return response.json()["message"]["content"]
+            data = response.json()
+            return data["response"] if self.use_raw_final_channel else data["message"]["content"]
 
     def chat(self, messages: list[dict[str, str]], *, temperature: float = 0.2) -> str:
         try:

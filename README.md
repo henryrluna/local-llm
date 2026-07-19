@@ -34,10 +34,10 @@ The Local Deep Research app is the custom asynchronous implementation in `./loca
 
 ## Configuration
 
-The default writing model is BottleCap AI's token-efficient ThinkingCap Qwen 3.6 27B, using the official `Q4_K_M` GGUF quantization through Ollama. The model files occupy about 17 GB including vision support, so the model nearly fills a 16 GB RTX 5060 Ti and uses system RAM for the remainder. The stack limits context to 32,768 tokens to avoid the much heavier spill caused by the previous 71,680-token setting; the research harness writes reports section-by-section, so this remains ample. `nomic-embed-text` remains the lightweight embedding model. To change either model, copy `.env.example` to `.env` or edit your existing local `.env`:
+The default writing model is the locally installed `openai-20b-neoplus-uncensored:latest` model. Its approximately 11 GB package leaves more of a 16 GB RTX 5060 Ti available for the 32,768-token context and KV cache than the previous 27B model, reducing CPU spill. `nomic-embed-text` remains the lightweight embedding model. To change either model, copy `.env.example` to `.env` or edit your existing local `.env`:
 
 ```dotenv
-LOCAL_LLM_MODEL=hf.co/bottlecapai/ThinkingCap-Qwen3.6-27B-GGUF:Q4_K_M
+LOCAL_LLM_MODEL=openai-20b-neoplus-uncensored:latest
 LOCAL_LLM_EMBED_MODEL=nomic-embed-text
 HARNESS_PUBLIC_BASE_URL=http://localhost:5000
 ```
