@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from research_harness.config import Settings
-from research_harness.sources import Document, LocalCorpusConnector, NeedsAttention, SearxngConnector, SourceError, XConnector, deduplicate, requires_browser_attention
+from research_harness.sources import BingConnector, Document, LocalCorpusConnector, NeedsAttention, SearxngConnector, SourceError, WebSearchConnector, XConnector, deduplicate, requires_browser_attention
 
 
 def test_searxng_retries_explicit_fallback_engines(monkeypatch):
@@ -99,6 +99,52 @@ def test_searxng_zero_results_is_an_error(monkeypatch):
     monkeypatch.setattr("research_harness.sources.httpx.Client", FakeClient)
     with pytest.raises(SourceError, match="zero results"):
         SearxngConnector(Settings()).search("test")
+
+
+def test_bing_reads_keyless_rss_results(monkeypatch):
+    class FakeResponse:
+        content = b"""<?xml version='1.0'?><rss version='2.0'><channel><item><title>Useful result</title><link>https://example.test/evidence</link><description>Useful evidence summary</description></item></channel></rss>"""
+
+        def raise_for_status(self):
+            return None
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def get(self, url, params):
+            assert params["format"] == "rss"
+            return FakeResponse()
+
+    monkeypatch.setattr("research_harness.sources.httpx.Client", FakeClient)
+    results = BingConnector(Settings()).search("useful evidence")
+    assert results == [{
+        "title": "Useful result",
+        "url": "https://example.test/evidence",
+        "snippet": "Useful evidence summary",
+        "provider": "bing",
+    }]
+
+
+def test_web_search_falls_back_from_searxng_to_bing():
+    connector = WebSearchConnector(Settings())
+
+    class FailingSearch:
+        def search(self, query, limit):
+            raise SourceError("SearXNG unavailable")
+
+    class WorkingSearch:
+        def search(self, query, limit):
+            return [{"title": "Fallback", "url": "https://example.test", "snippet": "", "provider": "bing"}]
+
+    connector.connectors = (FailingSearch(), WorkingSearch())
+    assert connector.search("test")[0]["provider"] == "bing"
 
 
 def test_deduplicate_by_url_and_content():

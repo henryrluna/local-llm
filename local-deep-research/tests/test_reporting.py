@@ -54,4 +54,31 @@ None.
     assert "supply-chain" in normalized
     assert "public-facing" in normalized
     assert "article [1]" in normalized
-    assert '"I hope you understand my why."' in normalized
+    assert "“I hope you understand my why.”" in normalized
+
+
+def test_pdf_preserves_unicode_and_renders_markdown_italics(tmp_path: Path):
+    markdown = """# Full Research Report
+
+The café described *measured uncertainty* and _independent verification_.
+
+- A Unicode bullet with naïve assumptions.
+
+# Contradictions, Uncertainty, and Limitations
+
+None.
+"""
+    path = tmp_path / "unicode-italics.pdf"
+    render_pdf(markdown, path, "Unicode and italics regression")
+    reader = PdfReader(str(path))
+    text = " ".join((page.extract_text() or "") for page in reader.pages)
+    assert "café" in text
+    assert "naïve" in text
+    assert "*measured uncertainty*" not in text
+    assert "_independent verification_" not in text
+    fonts = {
+        font_name
+        for page in reader.pages
+        for font_name in (page.get("/Resources", {}).get("/Font", {}) or {}).keys()
+    }
+    assert len(fonts) >= 2

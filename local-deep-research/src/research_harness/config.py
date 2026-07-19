@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     cloud_api_key: str = ""
 
     searxng_url: str = "http://localhost:8081"
+    bing_search_url: str = "https://www.bing.com/search"
     substack_feeds: str = ""
     x_bearer_token: str = ""
     x_user_id: str = ""

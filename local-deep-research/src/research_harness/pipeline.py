@@ -19,7 +19,7 @@ from .sources import (
     Document,
     LocalCorpusConnector,
     NeedsAttention,
-    SearxngConnector,
+    WebSearchConnector,
     SourceError,
     SubstackConnector,
     WebFetcher,
@@ -81,12 +81,13 @@ class ResearchPipeline:
         use_web = options.get("use_web", True)
         web_documents = 0
         if use_web:
-            search = SearxngConnector(self.settings)
+            search = WebSearchConnector(self.settings)
             for query in plan["queries"][:8]:
                 self.check_cancelled(job["id"])
                 try:
                     results = search.search(str(query), limit=5)
-                    trace["queries"].append({"query": query, "results": len(results)})
+                    provider_name = results[0].get("provider", "unknown") if results else "unknown"
+                    trace["queries"].append({"query": query, "results": len(results), "provider": provider_name})
                 except SourceError as exc:
                     trace["errors"].append(str(exc))
                     continue
@@ -100,7 +101,7 @@ class ResearchPipeline:
                         trace["errors"].append(str(exc))
             trace["connectors"]["web_search"] = web_documents
             if web_documents == 0 and seed_documents == 0:
-                detail = "; ".join(trace["errors"][-3:]) or "SearXNG returned no usable pages"
+                detail = "; ".join(trace["errors"][-3:]) or "All web search providers returned no usable pages"
                 raise NeedsAttention(
                     "Web search produced zero usable sources, so the harness stopped instead of substituting unrelated feed articles. "
                     + detail

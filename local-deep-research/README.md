@@ -12,6 +12,7 @@ The service provides a mobile-friendly queue at port 5000, durable SQLite jobs, 
 
 - Ollama is supplied by the root Compose service at `http://ollama:11434`.
 - SearXNG is supplied by the root Compose service at `http://searxng:8080`.
+- Web queries fall back to Bing's keyless RSS endpoint when SearXNG returns no usable results or is unavailable.
 - Runtime data is mounted from `../local-deep-research-data` to `/app/data`.
 - Private sources are mounted read-only from `../private-corpus`.
 - Optional credentials are loaded from the ignored `../research-harness.env`.
@@ -28,4 +29,4 @@ py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pytest -q --basetemp .\work\pytest
 ```
 
-The canonical report stays in structured JSON and Markdown; the UI exposes the validated PDF artifact.
+The canonical report stays in structured JSON and Markdown; the UI exposes the validated PDF artifact. PDFs embed Unicode-capable regular, bold, and italic fonts so non-ASCII text and Markdown emphasis render without replacement characters or visible asterisks.

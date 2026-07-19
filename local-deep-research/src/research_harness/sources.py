@@ -148,7 +148,7 @@ class SearxngConnector:
                     raise SourceError(f"SearXNG returned zero results for '{query}'.{detail}")
                 results = results[:limit]
                 return [
-                    {"title": item.get("title", item["url"]), "url": item["url"], "snippet": item.get("content", "")}
+                    {"title": item.get("title", item["url"]), "url": item["url"], "snippet": item.get("content", ""), "provider": "searxng"}
                     for item in results if item.get("url")
                 ]
         except SourceError:
@@ -157,6 +157,61 @@ class SearxngConnector:
             raise SourceError(
                 f"SearXNG search failed at {self.url}. Start the configured search service or provide seed URLs: {exc}"
             ) from exc
+
+
+class BingConnector:
+    """Keyless Bing RSS search, independent of the local SearXNG instance."""
+
+    def __init__(self, settings: Settings):
+        self.url = settings.bing_search_url
+
+    def search(self, query: str, limit: int = 6) -> list[dict[str, str]]:
+        try:
+            with httpx.Client(
+                timeout=30,
+                follow_redirects=True,
+                headers={"User-Agent": USER_AGENT, "Accept": "application/rss+xml, application/xml"},
+            ) as client:
+                response = client.get(self.url, params={"q": query, "format": "rss", "count": limit})
+                response.raise_for_status()
+            feed = feedparser.parse(response.content)
+            results = []
+            for entry in feed.entries:
+                url = entry.get("link", "")
+                if not url:
+                    continue
+                _, snippet = clean_html(entry.get("summary", ""))
+                results.append({
+                    "title": html.unescape(entry.get("title", url)),
+                    "url": url,
+                    "snippet": snippet,
+                    "provider": "bing",
+                })
+                if len(results) >= limit:
+                    break
+            if not results:
+                raise SourceError(f"Bing returned zero results for '{query}'.")
+            return results
+        except SourceError:
+            raise
+        except (httpx.HTTPError, ValueError) as exc:
+            raise SourceError(f"Bing search failed at {self.url}: {exc}") from exc
+
+
+class WebSearchConnector:
+    """Try local metasearch first, then an independent external provider."""
+
+    def __init__(self, settings: Settings):
+        self.connectors = (SearxngConnector(settings), BingConnector(settings))
+
+    def search(self, query: str, limit: int = 6) -> list[dict[str, str]]:
+        errors: list[str] = []
+        for connector in self.connectors:
+            try:
+                return connector.search(query, limit)
+            except SourceError as exc:
+                errors.append(str(exc))
+        raise SourceError("All web search providers failed. " + " | ".join(errors))
 
 
 class SubstackConnector:

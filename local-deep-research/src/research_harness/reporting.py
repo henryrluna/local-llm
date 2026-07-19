@@ -5,12 +5,15 @@ import unicodedata
 from pathlib import Path
 from xml.sax.saxutils import escape
 
+import reportlab
 from pypdf import PdfReader
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import (
     KeepTogether,
     PageBreak,
@@ -18,6 +21,23 @@ from reportlab.platypus import (
     SimpleDocTemplate,
     Spacer,
 )
+
+
+def _register_unicode_fonts() -> None:
+    if "ResearchSans" in pdfmetrics.getRegisteredFontNames():
+        return
+    fonts_dir = Path(reportlab.__file__).parent / "fonts"
+    pdfmetrics.registerFont(TTFont("ResearchSans", str(fonts_dir / "Vera.ttf")))
+    pdfmetrics.registerFont(TTFont("ResearchSans-Bold", str(fonts_dir / "VeraBd.ttf")))
+    pdfmetrics.registerFont(TTFont("ResearchSans-Italic", str(fonts_dir / "VeraIt.ttf")))
+    pdfmetrics.registerFont(TTFont("ResearchSans-BoldItalic", str(fonts_dir / "VeraBI.ttf")))
+    pdfmetrics.registerFontFamily(
+        "ResearchSans",
+        normal="ResearchSans",
+        bold="ResearchSans-Bold",
+        italic="ResearchSans-Italic",
+        boldItalic="ResearchSans-BoldItalic",
+    )
 
 
 def citation_ids(text: str) -> set[str]:
@@ -68,19 +88,14 @@ def validate_citations(markdown: str, valid_ids: set[str]) -> list[str]:
 
 
 def _inline_markup(text: str) -> str:
-    # ReportLab's bundled Helvetica font is WinAnsi-based. Replace unsupported
-    # punctuation with readable ASCII equivalents before encoding. In
-    # particular, U+2011 used to render as a question mark inside words.
+    # Normalize dash variants to the report's ASCII-hyphen house style while
+    # preserving names, symbols, and punctuation for the embedded Unicode font.
     punctuation = str.maketrans({
         "\u2010": "-", "\u2011": "-", "\u2012": "-", "\u2013": "-",
         "\u2014": "-", "\u2015": "-", "\u2212": "-",
-        "\u2018": "'", "\u2019": "'", "\u201a": "'", "\u201b": "'",
-        "\u201c": '"', "\u201d": '"', "\u201e": '"', "\u201f": '"',
-        "\u2026": "...",
     })
-    text = text.translate(punctuation)
+    text = unicodedata.normalize("NFC", text).translate(punctuation)
     text = "".join(" " if unicodedata.category(char) == "Zs" else char for char in text)
-    text = text.encode("cp1252", errors="replace").decode("cp1252")
     links: list[str] = []
 
     def stash_link(match: re.Match[str]) -> str:
@@ -95,7 +110,9 @@ def _inline_markup(text: str) -> str:
     text = re.sub(r"https?://[^\s<>'\"]+", stash_link, text)
     value = escape(text)
     value = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", value)
-    value = re.sub(r"`(.+?)`", r"<font name='Courier'>\1</font>", value)
+    value = re.sub(r"(?<!\*)\*([^*\n]+)\*(?!\*)", r"<i>\1</i>", value)
+    value = re.sub(r"(?<!\w)_([^_\n]+)_(?!\w)", r"<i>\1</i>", value)
+    value = re.sub(r"`(.+?)`", r"<font name='ResearchSans'>\1</font>", value)
     for index, link in enumerate(links):
         value = value.replace(f"URLPLACEHOLDER{index}END", link)
     value = re.sub(r"\[((?:S)?\d+)\]", r"<font color='#3467eb'><b>[\1]</b></font>", value)
@@ -104,13 +121,15 @@ def _inline_markup(text: str) -> str:
 
 def render_pdf(markdown: str, output_path: Path, title: str) -> int:
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    _register_unicode_fonts()
     styles = getSampleStyleSheet()
-    styles.add(ParagraphStyle(name="CoverTitle", parent=styles["Title"], fontName="Helvetica-Bold", fontSize=26, leading=32, textColor=colors.HexColor("#18233A"), alignment=TA_CENTER, spaceAfter=24))
-    styles.add(ParagraphStyle(name="H1X", parent=styles["Heading1"], fontName="Helvetica-Bold", fontSize=18, leading=23, textColor=colors.HexColor("#18233A"), spaceBefore=16, spaceAfter=9, keepWithNext=True))
-    styles.add(ParagraphStyle(name="H2X", parent=styles["Heading2"], fontName="Helvetica-Bold", fontSize=14, leading=18, textColor=colors.HexColor("#28456F"), spaceBefore=12, spaceAfter=7, keepWithNext=True))
-    styles.add(ParagraphStyle(name="BodyX", parent=styles["BodyText"], fontName="Helvetica", fontSize=10.2, leading=15, textColor=colors.HexColor("#253047"), spaceAfter=8, alignment=TA_LEFT))
+    styles.add(ParagraphStyle(name="CoverTitle", parent=styles["Title"], fontName="ResearchSans-Bold", fontSize=26, leading=32, textColor=colors.HexColor("#18233A"), alignment=TA_CENTER, spaceAfter=24))
+    styles.add(ParagraphStyle(name="H1X", parent=styles["Heading1"], fontName="ResearchSans-Bold", fontSize=18, leading=23, textColor=colors.HexColor("#18233A"), spaceBefore=16, spaceAfter=9, keepWithNext=True))
+    styles.add(ParagraphStyle(name="H2X", parent=styles["Heading2"], fontName="ResearchSans-Bold", fontSize=14, leading=18, textColor=colors.HexColor("#28456F"), spaceBefore=12, spaceAfter=7, keepWithNext=True))
+    styles.add(ParagraphStyle(name="H3X", parent=styles["Heading3"], fontName="ResearchSans-Bold", fontSize=11.5, leading=15, textColor=colors.HexColor("#28456F"), spaceBefore=9, spaceAfter=5, keepWithNext=True))
+    styles.add(ParagraphStyle(name="BodyX", parent=styles["BodyText"], fontName="ResearchSans", fontSize=10.2, leading=15, textColor=colors.HexColor("#253047"), spaceAfter=8, alignment=TA_LEFT))
     styles.add(ParagraphStyle(name="ExecutiveX", parent=styles["BodyX"], fontSize=9.8, leading=13.6, spaceAfter=7))
-    styles.add(ParagraphStyle(name="BulletX", parent=styles["BodyX"], leftIndent=18, firstLineIndent=-9, bulletIndent=6, spaceAfter=5))
+    styles.add(ParagraphStyle(name="BulletX", parent=styles["BodyX"], leftIndent=18, firstLineIndent=-9, spaceBefore=2, spaceAfter=5))
     styles.add(ParagraphStyle(name="SourceX", parent=styles["BodyX"], fontSize=8.5, leading=12, textColor=colors.HexColor("#4B5870")))
 
     story = [Spacer(1, 1.2 * inch), Paragraph(_inline_markup(title), styles["CoverTitle"]), Spacer(1, 0.35 * inch), Paragraph("Deep Research Report", styles["Heading2"]), Spacer(1, 4.5 * inch), Paragraph("Generated by the Local-First Asynchronous Deep Research Harness", styles["SourceX"]), PageBreak()]
@@ -142,9 +161,9 @@ def render_pdf(markdown: str, output_path: Path, title: str) -> int:
             bibliography = heading.lower().startswith("bibliography")
             story.append(Paragraph(_inline_markup(heading), styles["H2X"]))
         elif line.startswith("### "):
-            story.append(Paragraph(_inline_markup(line[4:].strip()), styles["Heading3"]))
+            story.append(Paragraph(_inline_markup(line[4:].strip()), styles["H3X"]))
         elif re.match(r"^[-*]\s+", line):
-            story.append(Paragraph(_inline_markup(line[2:].strip()), styles["BulletX"], bulletText="•"))
+            story.append(Paragraph(_inline_markup("• " + line[2:].strip()), styles["BulletX"]))
         elif re.match(r"^\d+[.)]\s+", line):
             number, content = re.split(r"[.)]\s+", line, maxsplit=1)
             story.append(Paragraph(_inline_markup(content), styles["BulletX"], bulletText=f"{number}."))
@@ -161,7 +180,7 @@ def render_pdf(markdown: str, output_path: Path, title: str) -> int:
         canvas.saveState()
         canvas.setStrokeColor(colors.HexColor("#D8DFEA"))
         canvas.line(0.7 * inch, 0.58 * inch, 7.8 * inch, 0.58 * inch)
-        canvas.setFont("Helvetica", 8)
+        canvas.setFont("ResearchSans", 8)
         canvas.setFillColor(colors.HexColor("#6D788C"))
         canvas.drawString(0.7 * inch, 0.36 * inch, "Local Deep Research")
         canvas.drawRightString(7.8 * inch, 0.36 * inch, f"Page {doc.page}")
