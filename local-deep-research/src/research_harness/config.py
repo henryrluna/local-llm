@@ -20,6 +20,11 @@ class Settings(BaseSettings):
     ollama_url: str = "http://localhost:11434"
     ollama_model: str = "hf.co/bottlecapai/ThinkingCap-Qwen3.6-27B-GGUF:Q4_K_M"
     ollama_embed_model: str = "nomic-embed-text"
+    ollama_timeout_seconds: float = 3600
+    ollama_num_ctx: int = 32768
+    ollama_chat_max_tokens: int = 2048
+    ollama_structured_max_tokens: int = 1024
+    ollama_keep_alive: str = "12h"
     cloud_base_url: str = "https://api.openai.com/v1"
     cloud_model: str = ""
     cloud_embed_model: str = "text-embedding-3-small"

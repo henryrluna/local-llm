@@ -43,19 +43,70 @@ class OllamaProvider(ModelProvider):
         self.base_url = settings.ollama_url.rstrip("/")
         self.model = settings.ollama_model
         self.embed_model = settings.ollama_embed_model
+        self.timeout_seconds = settings.ollama_timeout_seconds
+        self.num_ctx = settings.ollama_num_ctx
+        self.chat_max_tokens = settings.ollama_chat_max_tokens
+        self.structured_max_tokens = settings.ollama_structured_max_tokens
+        self.keep_alive = settings.ollama_keep_alive
+
+    def _chat_request(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        temperature: float,
+        max_tokens: int,
+        response_format: str | None = None,
+    ) -> str:
+        payload: dict[str, Any] = {
+            "model": self.model,
+            "messages": messages,
+            "stream": False,
+            "think": False,
+            "keep_alive": self.keep_alive,
+            "options": {
+                "temperature": temperature,
+                "num_ctx": self.num_ctx,
+                "num_predict": max_tokens,
+            },
+        }
+        if response_format:
+            payload["format"] = response_format
+        with httpx.Client(timeout=httpx.Timeout(self.timeout_seconds, connect=10)) as client:
+            response = client.post(f"{self.base_url}/api/chat", json=payload)
+            response.raise_for_status()
+            return response.json()["message"]["content"]
 
     def chat(self, messages: list[dict[str, str]], *, temperature: float = 0.2) -> str:
         try:
-            with httpx.Client(timeout=httpx.Timeout(600, connect=5)) as client:
-                response = client.post(
-                    f"{self.base_url}/api/chat",
-                    json={"model": self.model, "messages": messages, "stream": False, "options": {"temperature": temperature}},
-                )
-                response.raise_for_status()
-                return response.json()["message"]["content"]
+            return self._chat_request(
+                messages,
+                temperature=temperature,
+                max_tokens=self.chat_max_tokens,
+            )
         except (httpx.HTTPError, KeyError) as exc:
             raise ProviderError(
-                f"Ollama request failed at {self.base_url}. Confirm Ollama is running and model '{self.model}' is installed: {exc}"
+                f"Ollama request failed at {self.base_url} after a {self.timeout_seconds:g}s limit. "
+                f"Confirm Ollama is running and model '{self.model}' is installed: {exc}"
+            ) from exc
+
+    def structured(self, messages: list[dict[str, str]]) -> dict[str, Any]:
+        try:
+            raw = self._chat_request(
+                messages,
+                temperature=0.1,
+                max_tokens=self.structured_max_tokens,
+                response_format="json",
+            ).strip()
+            if raw.startswith("```"):
+                raw = raw.split("\n", 1)[1].rsplit("```", 1)[0]
+                if raw.startswith("json"):
+                    raw = raw[4:].lstrip()
+            return json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise ProviderError(f"Model did not return valid JSON: {exc}") from exc
+        except (httpx.HTTPError, KeyError) as exc:
+            raise ProviderError(
+                f"Ollama structured request failed at {self.base_url} after a {self.timeout_seconds:g}s limit: {exc}"
             ) from exc
 
     def embeddings(self, texts: list[str]) -> list[list[float]]:

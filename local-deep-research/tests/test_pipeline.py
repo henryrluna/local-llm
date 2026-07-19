@@ -85,3 +85,48 @@ def test_ollama_unavailable_becomes_recoverable_attention_state(tmp_path: Path):
 def test_local_provider_does_not_require_cloud_credentials(tmp_path: Path):
     settings = Settings(cloud_api_key="", cloud_model="", ollama_url="http://localhost:11434")
     assert isinstance(provider_for("ollama", settings), OllamaProvider)
+
+
+def test_ollama_structured_generation_is_bounded_and_disables_thinking(monkeypatch):
+    captured = {}
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"message": {"content": '{"queries": [], "sections": []}'}}
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            captured["timeout"] = kwargs["timeout"]
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def post(self, url, json):
+            captured["url"] = url
+            captured["payload"] = json
+            return FakeResponse()
+
+    monkeypatch.setattr("research_harness.providers.httpx.Client", FakeClient)
+    settings = Settings(
+        ollama_url="http://ollama:11434",
+        ollama_timeout_seconds=3600,
+        ollama_num_ctx=32768,
+        ollama_structured_max_tokens=1024,
+        ollama_keep_alive="12h",
+    )
+
+    result = OllamaProvider(settings).structured([{"role": "user", "content": "Plan this."}])
+
+    assert result == {"queries": [], "sections": []}
+    assert captured["url"] == "http://ollama:11434/api/chat"
+    assert captured["payload"]["format"] == "json"
+    assert captured["payload"]["think"] is False
+    assert captured["payload"]["keep_alive"] == "12h"
+    assert captured["payload"]["options"]["num_ctx"] == 32768
+    assert captured["payload"]["options"]["num_predict"] == 1024
