@@ -89,13 +89,17 @@ def health():
         local_ip = socket.gethostbyname(hostname)
     except OSError:
         pass
+    searxng_reachable = reachable(f"{settings.searxng_url.rstrip('/')}/search?q=test&format=json")
+    bing_fallback_configured = bool(settings.bing_search_url)
     return {
         "status": "ok",
         "hostname": hostname,
         "local_ip": local_ip,
         "phone_url": f"http://{local_ip}:{settings.port}" if local_ip != "unknown" else None,
         "ollama_reachable": reachable(f"{settings.ollama_url.rstrip('/')}/api/tags"),
-        "searxng_reachable": reachable(f"{settings.searxng_url.rstrip('/')}/search?q=test&format=json"),
+        "searxng_reachable": searxng_reachable,
+        "bing_fallback_configured": bing_fallback_configured,
+        "web_search_ready": searxng_reachable or bing_fallback_configured,
         "cloud_configured": bool(settings.cloud_api_key and settings.cloud_model),
         "x_configured": bool(settings.x_bearer_token and settings.x_user_id),
         "browser_fallback_configured": bool(settings.browser_cdp_url),

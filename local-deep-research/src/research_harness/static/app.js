@@ -41,9 +41,10 @@ async function health(){
   try{
     const h=await api('/api/health');
     if(sequence!==healthCheckSequence) return;
-    const bits=[h.ollama_reachable?'Ollama ready':'Ollama offline', h.searxng_reachable?'search ready':'search offline'];
+    const searchLabel=h.searxng_reachable?'search ready':(h.bing_fallback_configured?'Bing fallback':'search offline');
+    const bits=[h.ollama_reachable?'Ollama ready':'Ollama offline', searchLabel];
     button.querySelector('span').textContent=bits.join(' · ');
-    button.classList.toggle('ok', h.ollama_reachable && h.searxng_reachable);
+    button.classList.toggle('ok', h.ollama_reachable && h.web_search_ready);
     button.title=h.phone_url ? `Phone: ${h.phone_url} · Click to recheck` : 'Click to recheck';
   }catch(e){
     if(sequence!==healthCheckSequence) return;
