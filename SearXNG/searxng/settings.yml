@@ -13,3 +13,15 @@ search:
   formats:
     - html
     - json
+engines:
+  # The default public engines are frequently throttled. Keep several
+  # independently tested fallbacks active so a single CAPTCHA does not zero out
+  # web research.
+  - name: yandex
+    disabled: false
+  - name: presearch
+    disabled: false
+  - name: dogpile
+    disabled: false
+  - name: privacywall
+    disabled: false

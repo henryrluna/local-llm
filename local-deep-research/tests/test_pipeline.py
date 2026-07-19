@@ -20,6 +20,19 @@ def test_lexical_ranking_prefers_relevant_document(tmp_path: Path):
     assert ranked[0] is relevant
 
 
+def test_ranking_limits_substack_when_web_sources_exist(tmp_path: Path):
+    settings = Settings(data_dir=tmp_path / "data", private_corpus_dir=tmp_path / "private")
+    settings.prepare()
+    db = Database(settings.db_path)
+    db.initialize()
+    pipeline = ResearchPipeline(settings, db)
+    web = [Document.create(kind="web", title=f"Web {index}", url=f"https://web.test/{index}", content="topic evidence " * 50) for index in range(10)]
+    feeds = [Document.create(kind="substack", title=f"Feed {index}", url=f"https://feed.test/{index}", content="topic evidence " * 100) for index in range(10)]
+    ranked = pipeline._rank("topic evidence", feeds + web, 12)
+    assert sum(document.kind == "substack" for document in ranked) <= 4
+    assert sum(document.kind == "web" for document in ranked) >= 8
+
+
 def test_executive_summary_is_hard_capped_to_one_page_budget():
     original = "word " * 450
     limited = ResearchPipeline._limit_words(original, 400)

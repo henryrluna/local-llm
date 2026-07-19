@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from pathlib import Path
 from xml.sax.saxutils import escape
 
@@ -68,7 +69,17 @@ def validate_citations(markdown: str, valid_ids: set[str]) -> list[str]:
 
 def _inline_markup(text: str) -> str:
     # ReportLab's bundled Helvetica font is WinAnsi-based. Replace unsupported
-    # glyphs deterministically instead of rendering black boxes.
+    # punctuation with readable ASCII equivalents before encoding. In
+    # particular, U+2011 used to render as a question mark inside words.
+    punctuation = str.maketrans({
+        "\u2010": "-", "\u2011": "-", "\u2012": "-", "\u2013": "-",
+        "\u2014": "-", "\u2015": "-", "\u2212": "-",
+        "\u2018": "'", "\u2019": "'", "\u201a": "'", "\u201b": "'",
+        "\u201c": '"', "\u201d": '"', "\u201e": '"', "\u201f": '"',
+        "\u2026": "...",
+    })
+    text = text.translate(punctuation)
+    text = "".join(" " if unicodedata.category(char) == "Zs" else char for char in text)
     text = text.encode("cp1252", errors="replace").decode("cp1252")
     links: list[str] = []
 

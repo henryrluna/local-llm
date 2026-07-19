@@ -3,7 +3,102 @@ from pathlib import Path
 import pytest
 
 from research_harness.config import Settings
-from research_harness.sources import Document, LocalCorpusConnector, NeedsAttention, XConnector, deduplicate, requires_browser_attention
+from research_harness.sources import Document, LocalCorpusConnector, NeedsAttention, SearxngConnector, SourceError, XConnector, deduplicate, requires_browser_attention
+
+
+def test_searxng_retries_explicit_fallback_engines(monkeypatch):
+    calls = []
+
+    class FakeResponse:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self.payload
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def get(self, url, params):
+            calls.append(params)
+            if len(calls) == 1:
+                return FakeResponse({"results": [], "unresponsive_engines": [["duckduckgo", "CAPTCHA"]]})
+            return FakeResponse({"results": [{"title": "Test result", "url": "https://example.test", "content": "Evidence"}]})
+
+    monkeypatch.setattr("research_harness.sources.httpx.Client", FakeClient)
+    results = SearxngConnector(Settings(searxng_url="http://searxng:8080")).search("test")
+    assert results[0]["url"] == "https://example.test"
+    assert calls[1]["engines"] == "yandex,presearch,dogpile,privacywall"
+
+
+def test_searxng_filters_irrelevant_results_before_returning(monkeypatch):
+    class FakeResponse:
+        def __init__(self, results):
+            self.results = results
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"results": self.results, "unresponsive_engines": []}
+
+    class FakeClient:
+        calls = 0
+
+        def __init__(self, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def get(self, url, params):
+            FakeClient.calls += 1
+            if FakeClient.calls == 1:
+                return FakeResponse([{"title": "Saint Peter", "url": "https://irrelevant.test", "content": "Biblical biography"}])
+            return FakeResponse([{"title": "Peter Thiel political influence", "url": "https://relevant.test", "content": "Funding networks"}])
+
+    monkeypatch.setattr("research_harness.sources.httpx.Client", FakeClient)
+    results = SearxngConnector(Settings()).search("Peter Theil political influence")
+    assert [result["url"] for result in results] == ["https://relevant.test"]
+
+
+def test_searxng_zero_results_is_an_error(monkeypatch):
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"results": [], "unresponsive_engines": [["bing", "rate limit"]]}
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def get(self, url, params):
+            return FakeResponse()
+
+    monkeypatch.setattr("research_harness.sources.httpx.Client", FakeClient)
+    with pytest.raises(SourceError, match="zero results"):
+        SearxngConnector(Settings()).search("test")
 
 
 def test_deduplicate_by_url_and_content():

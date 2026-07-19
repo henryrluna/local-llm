@@ -36,3 +36,22 @@ def test_rendered_pdf_has_headers_footers_and_pages(tmp_path: Path):
     executive_pages = [index for index, text in enumerate(page_text) if "Executive Summary" in text]
     assert executive_pages == [1]
     assert "Research Question and Scope" in page_text[2]
+
+
+def test_pdf_normalizes_unicode_hyphens_spaces_and_quotes(tmp_path: Path):
+    markdown = """# Full Research Report
+
+Theil's post describes interlinked supply\u2011chain units and a public\u2011facing agenda. The article\u202f[1] says, \u201cI hope you understand my why.\u201d
+
+# Contradictions, Uncertainty, and Limitations
+
+None.
+"""
+    path = tmp_path / "unicode.pdf"
+    render_pdf(markdown, path, "Unicode punctuation regression")
+    text = "".join(page.extract_text() or "" for page in PdfReader(str(path)).pages)
+    normalized = " ".join(text.split())
+    assert "supply-chain" in normalized
+    assert "public-facing" in normalized
+    assert "article [1]" in normalized
+    assert '"I hope you understand my why."' in normalized

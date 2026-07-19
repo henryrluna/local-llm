@@ -107,14 +107,52 @@ class SearxngConnector:
 
     def search(self, query: str, limit: int = 6) -> list[dict[str, str]]:
         try:
+            query_terms = set(re.findall(r"[a-z0-9]{3,}", query.lower())) - {
+                "the", "and", "for", "with", "from", "what", "when", "where", "does", "have", "about",
+            }
+            minimum_matches = 1 if len(query_terms) <= 2 else 2
+
+            def relevant(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+                return [
+                    item for item in items
+                    if len(query_terms & set(re.findall(
+                        r"[a-z0-9]{3,}",
+                        f"{item.get('title', '')} {item.get('content', '')}".lower(),
+                    ))) >= minimum_matches
+                ]
+
             with httpx.Client(timeout=30) as client:
-                response = client.get(f"{self.url}/search", params={"q": query, "format": "json", "language": "en"})
+                params = {"q": query, "format": "json", "language": "en"}
+                response = client.get(f"{self.url}/search", params=params)
                 response.raise_for_status()
-                results = response.json().get("results", [])[:limit]
+                payload = response.json()
+                results = relevant(payload.get("results", []))
+                if not results:
+                    # Public search engines routinely suspend a local SearXNG
+                    # instance after CAPTCHAs or rate limits. Retry several engines
+                    # that can also be invoked explicitly when defaults fail.
+                    response = client.get(
+                        f"{self.url}/search",
+                        params={**params, "engines": "yandex,presearch,dogpile,privacywall"},
+                    )
+                    response.raise_for_status()
+                    payload = response.json()
+                    results = relevant(payload.get("results", []))
+                if not results:
+                    failures = ", ".join(
+                        f"{item[0]}: {item[1]}"
+                        for item in payload.get("unresponsive_engines", [])
+                        if isinstance(item, list) and len(item) >= 2
+                    )
+                    detail = f" Failed engines: {failures}." if failures else ""
+                    raise SourceError(f"SearXNG returned zero results for '{query}'.{detail}")
+                results = results[:limit]
                 return [
                     {"title": item.get("title", item["url"]), "url": item["url"], "snippet": item.get("content", "")}
                     for item in results if item.get("url")
                 ]
+        except SourceError:
+            raise
         except (httpx.HTTPError, ValueError, KeyError) as exc:
             raise SourceError(
                 f"SearXNG search failed at {self.url}. Start the configured search service or provide seed URLs: {exc}"

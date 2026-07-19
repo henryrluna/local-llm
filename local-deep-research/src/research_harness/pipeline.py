@@ -68,15 +68,18 @@ class ResearchPipeline:
         trace: dict[str, Any] = {"queries": [], "errors": [], "connectors": {}}
         fetcher = WebFetcher()
         seed_urls = [u.strip() for u in options.get("seed_urls", []) if u.strip()]
+        seed_documents = 0
 
         for url in seed_urls:
             self.check_cancelled(job["id"])
             try:
                 documents.append(fetcher.fetch(url))
+                seed_documents += 1
             except SourceError as exc:
                 trace["errors"].append(str(exc))
 
         use_web = options.get("use_web", True)
+        web_documents = 0
         if use_web:
             search = SearxngConnector(self.settings)
             for query in plan["queries"][:8]:
@@ -92,8 +95,16 @@ class ResearchPipeline:
                         break
                     try:
                         documents.append(fetcher.fetch(result["url"]))
+                        web_documents += 1
                     except SourceError as exc:
                         trace["errors"].append(str(exc))
+            trace["connectors"]["web_search"] = web_documents
+            if web_documents == 0 and seed_documents == 0:
+                detail = "; ".join(trace["errors"][-3:]) or "SearXNG returned no usable pages"
+                raise NeedsAttention(
+                    "Web search produced zero usable sources, so the harness stopped instead of substituting unrelated feed articles. "
+                    + detail
+                )
 
         feed_urls = [f.strip() for f in options.get("substack_feeds", []) if f.strip()]
         feed_urls.extend(f.strip() for f in self.settings.substack_feeds.split(",") if f.strip())
@@ -140,7 +151,22 @@ class ResearchPipeline:
         def score(document: Document) -> tuple[int, int]:
             words = Counter(re.findall(r"[a-z0-9]{3,}", (document.title + " " + document.content[:12000]).lower()))
             return sum(min(words[t], 8) for t in terms), len(document.content)
-        return sorted(documents, key=score, reverse=True)[:limit]
+        ranked = sorted(documents, key=score, reverse=True)
+        if not any(document.kind == "web" for document in ranked):
+            return ranked[:limit]
+        # Curated feeds should enrich web research, not silently replace it.
+        substack_limit = max(4, limit // 3)
+        selected: list[Document] = []
+        substack_count = 0
+        for document in ranked:
+            if document.kind == "substack":
+                if substack_count >= substack_limit:
+                    continue
+                substack_count += 1
+            selected.append(document)
+            if len(selected) >= limit:
+                break
+        return selected
 
     @staticmethod
     def _evidence_context(documents: list[Document], max_chars: int = 60_000) -> tuple[str, dict[str, Document]]:
